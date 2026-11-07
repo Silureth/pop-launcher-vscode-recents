@@ -32,7 +32,7 @@ Trigger it by typing `vc` followed by your search query. The trigger prefix can 
    npm install
    ```
 
-3. Build the plugin:
+4. Build the plugin:
 
    ```sh
    npm run build

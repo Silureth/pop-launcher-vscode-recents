@@ -1,6 +1,6 @@
 (
     name: "Vscode open recent",
-    description: "Open any recent file, project or workspace in Vscode\nSyntaxe: vc <search>",
+    description: "Open any recent file, project or workspace in Vscode\nSyntax: vc <search>",
     bin: (path: "dist/index.cjs"),
     icon: Name("/home/<fill-you-username>/.local/share/pop-launcher/plugins/vscode-open-recent/assets/plugin.svg"),
     query: (

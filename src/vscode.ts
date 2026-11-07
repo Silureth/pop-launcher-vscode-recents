@@ -1,58 +1,54 @@
-import { join } from "path";
-import { open } from "sqlite";
-import { exec } from "child_process";
+import { spawn } from "child_process";
+import { existsSync, readFileSync } from "fs";
+import { readdir, readFile, stat } from "fs/promises";
+import { homedir } from "os";
+import { basename, dirname, join } from "path";
+import { fileURLToPath } from "url";
 import Fuse from "fuse.js";
-import sqlite3 from "sqlite3";
 
-const PATH_DIRS = ["/usr/bin", "/bin", "/snap/bin"];
 const EXECUTABLE = "code";
-const CONFIG_PATH = ".config/Code/User/globalStorage/state.vscdb";
+const WORKSPACE_STORAGE = join(homedir(), ".config/Code/User/workspaceStorage");
+const CONFIG_FILE = join(__dirname, "..", "config.json");
+const MAX_RESULTS = 8;
 const FUSE_OPTIONS = {
-  keys: ["type", "name", "path"],
+  keys: ["name", "path"],
 };
 
-type Db = DbRow[];
-type DbRecentlyOpened = {
-  entries: DbEntry[];
+interface Config {
+  always_open_in_new_window: boolean;
+  hide_deleted_entries: boolean;
+  "vscode-cli-additional-args": string[];
+}
+
+const DEFAULT_CONFIG: Config = {
+  always_open_in_new_window: true,
+  hide_deleted_entries: true,
+  "vscode-cli-additional-args": [],
 };
 
-interface DbRow {
-  key: string;
-  value: any;
-}
-
-interface DbEntry {
-  workspace?: DbWorkspace;
-  folderUri?: string;
-  fileUri?: string;
-  label?: string;
-  remoteAuthority?: string;
-}
-
-interface DbWorkspace {
-  id: string;
-  configPath: string;
+interface WorkspaceJson {
+  folder?: string;
+  workspace?: string;
 }
 
 export interface Entry {
-  type: "file" | "workspace" | "folder";
+  type: "workspace" | "folder";
   name: string;
+  /** Parent directory shown as the description (home shortened to ~). */
   path: string;
-  full_path: string;
+  /** Original VS Code URI (file:// or vscode-remote://). */
+  uri: string;
+  /** Local filesystem path, or null for remote URIs. */
+  localPath: string | null;
 }
 
 export type RecentlyOpened = Entry[];
 
 export class Vscode {
-  recentlyOpened: RecentlyOpened;
-  private vscodeIsInstalled: boolean;
-  private configPath: string;
+  recentlyOpened: RecentlyOpened = [];
+  private config: Config = loadConfig();
 
-  private constructor() {
-    this.recentlyOpened = [];
-    this.vscodeIsInstalled = false;
-    this.configPath = CONFIG_PATH;
-  }
+  private constructor() {}
 
   static async init() {
     const vscode = new Vscode();
@@ -60,134 +56,105 @@ export class Vscode {
     return vscode;
   }
 
-  private async fetchRecentlyOpenedOLD(): Promise<RecentlyOpened> {
-    try {
-      const db = await open({
-        filename: join(process.env.HOME || "", this.configPath),
-        driver: sqlite3.cached.Database,
-      });
-
-      const rows = await db.all<Db>(
-        "SELECT * FROM ItemTable WHERE key = 'history.recentlyOpenedPathsList'"
-      );
-
-      if (rows.length === 0) {
-        throw new Error("Could not find recently opened paths");
-      }
-
-      const row = rows[0] as DbRow;
-      const rowValue = JSON.parse(row.value) as DbRecentlyOpened;
-      const recent = rowValue.entries;
-
-      return recent.map((entry) => {
-        return this.convertToEntry(entry);
-      });
-    } catch (error) {
-      throw error;
-    }
-  }
-
+  /**
+   * VS Code 1.120+ no longer keeps `history.recentlyOpenedPathsList` in the
+   * global state DB, so recents are reconstructed from workspaceStorage:
+   * each subfolder has a workspace.json naming the folder/workspace, and the
+   * mtime of its state.vscdb tells when it was last used.
+   */
   private async fetchRecentlyOpened(): Promise<RecentlyOpened> {
-  const { readdir, readFile, stat } = await import("fs/promises");
-  const { join } = await import("path");
-  const workspaceStorage = join(process.env.HOME || "", ".config/Code/User/workspaceStorage");
-
-  const dirs = await readdir(workspaceStorage);
-
-  const entries = await Promise.all(
-    dirs.map(async (dir) => {
-      const jsonPath = join(workspaceStorage, dir, "workspace.json");
-      const dbPath = join(workspaceStorage, dir, "state.vscdb");
-      try {
-        const [content, dbStat] = await Promise.all([
-          readFile(jsonPath, "utf-8"),
-          stat(dbPath),
-        ]);
-        const data = JSON.parse(content);
-        return { data, mtime: dbStat.mtimeMs };
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  return entries
-    .filter((e): e is { data: any; mtime: number } => e !== null)
-    .sort((a, b) => b.mtime - a.mtime)
-    .map(({ data }) => {
-      const uri: string = data.folder || data.workspace || "";
-      const type = data.workspace ? "workspace" : "folder";
-      return {
-        type,
-        name: getFileNameFromPath(uri),
-        path: getPathWithoutFileName(uri),
-        full_path: uri.replace("file://", ""),
-      } as Entry;
-    })
-    .filter((e) => e.full_path !== "");
-}
-
-  search(query: string) {
-    const fuse = new Fuse(this.recentlyOpened, FUSE_OPTIONS);
-    const results = fuse.search(query).slice(0, 8);
-
-    return results.map((result) => {
-      return result.item;
-    }, []);
-  }
-
-  async open(entry: Entry) {
-    exec(`${EXECUTABLE} ${entry.full_path}`, (err) => {
-      if (err) {
-        throw err;
-      }
-    });
-  }
-
-  private convertToEntry(entry: DbEntry): Entry {
-    if (entry.workspace) {
-      return {
-        type: "workspace",
-        name: getFileNameFromPath(entry.workspace.configPath),
-        path: getPathWithoutFileName(entry.workspace.configPath),
-        full_path: entry.workspace.configPath.replace("file://", ""),
-      };
-    } else if (entry.folderUri) {
-      return {
-        type: "folder",
-        name: getFileNameFromPath(entry.folderUri),
-        path: getPathWithoutFileName(entry.folderUri),
-        full_path: entry.folderUri.replace("file://", ""),
-      };
-    } else if (entry.fileUri) {
-      return {
-        type: "file",
-        name: getFileNameFromPath(entry.fileUri),
-        path: getPathWithoutFileName(entry.fileUri),
-        full_path: entry.fileUri.replace("file://", ""),
-      };
-    } else {
-      throw new Error("Unknown entry type");
+    let dirs: string[];
+    try {
+      dirs = await readdir(WORKSPACE_STORAGE);
+    } catch {
+      return [];
     }
+
+    const found = await Promise.all(
+      dirs.map(async (dir) => {
+        try {
+          const [content, dbStat] = await Promise.all([
+            readFile(join(WORKSPACE_STORAGE, dir, "workspace.json"), "utf-8"),
+            stat(join(WORKSPACE_STORAGE, dir, "state.vscdb")),
+          ]);
+          const data = JSON.parse(content) as WorkspaceJson;
+          const entry = toEntry(data);
+          return entry ? { entry, mtime: dbStat.mtimeMs } : null;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const seen = new Set<string>();
+    return found
+      .filter((f): f is { entry: Entry; mtime: number } => f !== null)
+      .sort((a, b) => b.mtime - a.mtime)
+      .map((f) => f.entry)
+      .filter((entry) => {
+        if (seen.has(entry.uri)) return false;
+        seen.add(entry.uri);
+        if (this.config.hide_deleted_entries && entry.localPath) {
+          return existsSync(entry.localPath);
+        }
+        return true;
+      });
+  }
+
+  search(query: string): RecentlyOpened {
+    const fuse = new Fuse(this.recentlyOpened, FUSE_OPTIONS);
+    return fuse
+      .search(query)
+      .slice(0, MAX_RESULTS)
+      .map((result) => result.item);
+  }
+
+  open(entry: Entry) {
+    const args: string[] = [
+      this.config.always_open_in_new_window ? "--new-window" : "--reuse-window",
+      ...this.config["vscode-cli-additional-args"],
+    ];
+
+    if (entry.localPath) {
+      args.push(entry.localPath);
+    } else {
+      args.push(entry.type === "workspace" ? "--file-uri" : "--folder-uri", entry.uri);
+    }
+
+    const child = spawn(EXECUTABLE, args, { detached: true, stdio: "ignore" });
+    child.on("error", () => {}); // e.g. `code` not in PATH; nothing useful to report to the launcher
+    child.unref();
   }
 }
 
-function getPathWithoutFileName(uri: string): string {
-  return uri
-    .replace("file://", "")
-    .split("/")
-    .slice(0, -1)
-    .join("/")
-    .replace(".code-workspace", "")
-    .replace("/home/" + process.env.USER, "~");
+function loadConfig(): Config {
+  try {
+    return { ...DEFAULT_CONFIG, ...JSON.parse(readFileSync(CONFIG_FILE, "utf-8")) };
+  } catch {
+    return DEFAULT_CONFIG;
+  }
 }
 
-function getFileNameFromPath(uri: string): string {
-  return (
-    uri
-      .replace("file://", "")
-      .split("/")
-      .pop()
-      ?.replace(".code-workspace", "") || ""
-  );
+function toEntry(data: WorkspaceJson): Entry | null {
+  const uri = data.workspace || data.folder;
+  if (!uri) return null;
+
+  let localPath: string | null = null;
+  let displayPath: string;
+  if (uri.startsWith("file://")) {
+    localPath = fileURLToPath(uri);
+    displayPath = localPath;
+  } else {
+    displayPath = decodeURIComponent(uri);
+  }
+
+  const home = homedir();
+  const parent = dirname(displayPath);
+  return {
+    type: data.workspace ? "workspace" : "folder",
+    name: basename(displayPath).replace(/\.code-workspace$/, ""),
+    path: parent === home || parent.startsWith(home + "/") ? "~" + parent.slice(home.length) : parent,
+    uri,
+    localPath,
+  };
 }

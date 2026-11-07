@@ -1,22 +1,23 @@
-export function cleanSearchQuery(query: string, plugin_id: string): string {
-  return query.trim().replace(new RegExp(`${plugin_id}(\\s|$)`), "");
+import { join } from "path";
+
+// The bundle lives in <plugin>/dist/index.cjs, so assets are one level up.
+const ASSETS_DIR = join(__dirname, "..", "assets");
+
+const ICONS: Record<string, string> = {
+  file: "file.svg",
+  workspace: "workspace.svg",
+  folder: "folder.svg",
+  info: "info.svg",
+  error: "error.svg",
+  warning: "warning.svg",
+};
+
+/** Strips the leading trigger word (e.g. "vc") and surrounding whitespace. */
+export function cleanSearchQuery(query: string, trigger: string): string {
+  return query.trim().replace(new RegExp(`^${trigger}\\s*`), "").trim();
 }
 
-export function getIcon(type: string) {
-  switch (type) {
-    case "file":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/file.svg";
-    case "workspace":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/workspace.svg";
-    case "folder":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/folder.svg";
-    case "info":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/info.svg";
-    case "error":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/error.svg";
-    case "warning":
-      return "/home/asaday/.local/share/pop-launcher/plugins/vscode-open-recent/assets/warning.svg";
-    default:
-      return "";
-  }
+export function getIcon(type: string): string {
+  const file = ICONS[type];
+  return file ? join(ASSETS_DIR, file) : "";
 }

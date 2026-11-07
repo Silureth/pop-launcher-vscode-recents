@@ -3,22 +3,15 @@ import { PopPlugin } from "pop-launcher-toolkit";
 import { cleanSearchQuery, getIcon } from "./utils";
 import { RecentlyOpened, Vscode } from "./vscode";
 
-// Main execution
-async function main() {
-  const plugin = await VscodePlugin.init();
-  plugin.run();
-}
+/** Must match the `regex` in plugin.ron. */
+const TRIGGER = "vc";
+const MAX_RESULTS = 8;
 
 class VscodePlugin extends PopPlugin {
-  private vscode: Vscode | null;
-  private query: string;
-  private results: RecentlyOpened;
+  private results: RecentlyOpened = [];
 
-  private constructor(vscode: Vscode) {
+  private constructor(private vscode: Vscode) {
     super();
-    this.query = "";
-    this.vscode = vscode;
-    this.results = vscode.recentlyOpened.slice(0, 8) || [];
   }
 
   static async init(): Promise<VscodePlugin> {
@@ -30,47 +23,27 @@ class VscodePlugin extends PopPlugin {
   }
 
   search(query: string) {
-    this.query = cleanSearchQuery(query, "vs");
+    const cleaned = cleanSearchQuery(query, TRIGGER);
+    this.results = cleaned
+      ? this.vscode.search(cleaned)
+      : this.vscode.recentlyOpened.slice(0, MAX_RESULTS);
 
-    if (!this.query) {
-      this.respond_with("Clear");
-      this.results.forEach((entry, idx) => {
-        this.respond_with({
-          Append: {
-            id: idx,
-            name: entry.name,
-            description: entry.path,
-            keywords: null,
-            icon: { Name: getIcon(entry.type) },
-            exec: null,
-            window: null,
-          },
-        });
-      });
-      this.respond_with("Finished");
-      return;
-    }
-
-    this.results = this.vscode?.search(this.query) || [];
+    this.respond_with("Clear");
 
     if (this.results.length === 0) {
-      this.respond_with("Clear");
       this.respond_with({
         Append: {
           id: 0,
-          name: "No results found.",
-          description: "Try a different query.",
+          name: cleaned ? "No results found." : "No recent VS Code workspaces.",
+          description: cleaned ? "Try a different query." : "",
           keywords: null,
           icon: { Name: getIcon("info") },
           exec: null,
           window: null,
         },
       });
-      this.respond_with("Finished");
-      return;
     }
 
-    this.respond_with("Clear");
     this.results.forEach((entry, idx) => {
       this.respond_with({
         Append: {
@@ -84,12 +57,13 @@ class VscodePlugin extends PopPlugin {
         },
       });
     });
+
     this.respond_with("Finished");
   }
 
   activate(index: number) {
     const entry = this.results[index];
-    this.vscode?.open(entry);
+    if (entry) this.vscode.open(entry);
     this.respond_with("Close");
   }
 
@@ -98,4 +72,4 @@ class VscodePlugin extends PopPlugin {
   }
 }
 
-main();
+VscodePlugin.init().then((plugin) => plugin.run());
