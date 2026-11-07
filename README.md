@@ -8,37 +8,35 @@ Trigger it by typing `vc` followed by your search query. The trigger prefix can 
 
 - [pop-launcher](https://github.com/pop-os/launcher)
 - VS Code installed with the `code` CLI available in `PATH`
-- Node.js
+- Node.js 18 or newer
 
 ## Setup
 
-1. Clone or copy this directory into your pop-launcher plugins folder:
+The prebuilt plugin (`dist/index.cjs`) is committed and has all its dependencies bundled in, so no `npm install` or build step is needed.
 
-   ```
-   ~/.local/share/pop-launcher/plugins/vscode-open-recent/
-   ```
-
-2. Copy and rename the example plugin config, then fill in your username:
+1. Clone this repository into your pop-launcher plugins folder:
 
    ```sh
-   cp plugin.example.ron plugin.ron
+   git clone https://github.com/Silureth/pop-launcher-vscode-recents.git \
+     ~/.local/share/pop-launcher/plugins/vscode-open-recent
+   cd ~/.local/share/pop-launcher/plugins/vscode-open-recent
    ```
 
-   Open `plugin.ron` and replace `<fill-you-username>` in the `icon` path with your actual username.
-
-3. Install dependencies:
+2. Create `plugin.ron` from the example, filling in your username in the `icon` path:
 
    ```sh
-   npm install
+   sed "s/<fill-you-username>/$USER/" plugin.example.ron > plugin.ron
    ```
 
-4. Build the plugin:
+3. Restart pop-launcher so it picks up the plugin:
 
    ```sh
-   npm run build
+   pkill pop-launcher
    ```
 
-   The compiled output is written to `dist/index.cjs`.
+   It starts again the next time you open the launcher.
+
+To update later, run `git pull` in the plugin folder.
 
 ## Configuration
 
@@ -51,6 +49,15 @@ Edit `config.json` to adjust behavior:
 | `vscode-cli-additional-args` | `[]` | Extra arguments passed to the `code` CLI |
 
 ## Development
+
+Install the build tooling and rebuild `dist/index.cjs` after changing anything in `src/`:
+
+```sh
+npm install
+npm run build
+```
+
+Commit the rebuilt `dist/index.cjs` along with your source changes, since that is what users run.
 
 Watch for source changes and rebuild automatically:
 
@@ -66,6 +73,8 @@ npm run preview
 
 ## Changelog
 
+- **2026-11-07** **build:** bundle dependencies into `dist/index.cjs` so no `npm install` is needed; upgrade dependencies
+- **2026-11-06** **fix:** `vc` trigger, icon paths, paths with spaces, remote folders; `config.json` options now take effect
 - **2026-05-18** **fix:** read from `workspaceStorage` for VS Code 1.120+ compatibility
 
 ## Credits

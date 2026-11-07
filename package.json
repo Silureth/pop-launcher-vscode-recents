@@ -4,18 +4,16 @@
   "scripts": {
     "build": "tsup --config tsup.config.json",
     "preview": "node dist/index.cjs",
-    "dev": "watch 'npm run build && npm run preview' src"
+    "dev": "tsup --config tsup.config.json --watch"
   },
   "dependencies": {
-    "fuse.js": "^6.6.2",
-    "pop-launcher-toolkit": "^1.0.0"
+    "fuse.js": "^7.5.0",
+    "pop-launcher-toolkit": "^1.2.0"
   },
   "devDependencies": {
-    "@types/node": "^18.15.10",
-    "esbuild": "^0.17.15",
-    "tsup": "^7.0.0",
-    "typescript": "^5.0.3",
-    "watch": "^1.0.2"
+    "@types/node": "^20.19.43",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
   },
   "license": "MIT"
 }
