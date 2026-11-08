@@ -2,9 +2,9 @@
     name: "VS Code open recent",
     description: "Open a recent VS Code folder or workspace\nSyntax: vc <search>",
     bin: (path: "vscode-open-recent"),
-    icon: Name("<plugin-folder>/assets/plugin.svg"),
+    icon: Name("document-open-recent"),
     query: (
-        regex: "^(vc)",
+        regex: "^vc( |$)",
         help: "vc",
         isolate: true,
         no_sort: true,

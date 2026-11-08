@@ -2,7 +2,7 @@
 
 A [pop-launcher](https://github.com/pop-os/launcher) plugin that lets you quickly open recent VS Code workspaces and folders directly from the launcher, including remote ones (WSL, SSH, containers).
 
-Trigger it by typing `vc` followed by your search query. The trigger prefix can be changed in `plugin.ron` by editing the `regex` and `help` fields under `query`.
+Trigger it by typing `vc` followed by your search query. Icons come from your desktop's icon theme, so they match the rest of your system.
 
 ## Requirements
 
@@ -19,16 +19,9 @@ The plugin is a single static binary for x86_64 or ARM64 Linux, so nothing else 
    mkdir -p ~/.local/share/pop-launcher/plugins
    curl -fsSL "https://github.com/Silureth/pop-launcher-vscode-recents/releases/latest/download/vscode-open-recent-$(uname -m).tar.gz" \
      | tar -xz -C ~/.local/share/pop-launcher/plugins
-   cd ~/.local/share/pop-launcher/plugins/vscode-open-recent
    ```
 
-2. Create `plugin.ron` from the example, filling in the plugin folder in the `icon` path:
-
-   ```sh
-   sed "s|<plugin-folder>|$PWD|" plugin.example.ron > plugin.ron
-   ```
-
-3. Restart pop-launcher so it picks up the plugin:
+2. Restart pop-launcher so it picks up the plugin:
 
    ```sh
    pkill pop-launcher
@@ -36,7 +29,7 @@ The plugin is a single static binary for x86_64 or ARM64 Linux, so nothing else 
 
    It starts again the next time you open the launcher.
 
-**To update**, re-run the `curl` command from step 1, then `pkill pop-launcher`. Your `plugin.ron` and `config.json` are kept, since the release only contains the example files.
+**To update**, repeat both steps. Your `config.json` is kept, since the release only contains `config.example.json`.
 
 ### Upgrading from the Node.js version
 
@@ -44,7 +37,7 @@ Earlier versions were a Node.js script installed with `git clone`. Move the old 
 
 ```sh
 mv ~/.local/share/pop-launcher/plugins/vscode-open-recent ~/vscode-open-recent-old
-# ...install steps 1-3...
+# ...install steps 1-2...
 cp ~/vscode-open-recent-old/config.json ~/.local/share/pop-launcher/plugins/vscode-open-recent/
 ```
 
@@ -58,6 +51,22 @@ The defaults below apply out of the box. To change them, copy `config.example.js
 | `hide_deleted_entries` | `true` | Skip local folders that no longer exist |
 | `vscode-cli-additional-args` | `[]` | Extra arguments passed to the `code` CLI, e.g. `["--profile", "Work"]` |
 
+### Changing the trigger
+
+The trigger word is set in `plugin.ron`, in the `regex` and `help` fields under `query`. For example, to use `code` instead of `vc`:
+
+```ron
+regex: "^code( |$)",
+help: "code",
+```
+
+Then run `pkill pop-launcher`. Releases include `plugin.ron`, so to keep your change when updating, leave it out when extracting:
+
+```sh
+curl -fsSL "https://github.com/Silureth/pop-launcher-vscode-recents/releases/latest/download/vscode-open-recent-$(uname -m).tar.gz" \
+  | tar -xz -C ~/.local/share/pop-launcher/plugins --exclude='*/plugin.ron'
+```
+
 ## Development
 
 Requires a [Rust toolchain](https://rustup.rs).
@@ -67,7 +76,7 @@ cargo test
 cargo build --release
 ```
 
-To run your local build in the launcher, clone the repository as the plugin folder (`~/.local/share/pop-launcher/plugins/vscode-open-recent`), create `plugin.ron` as in the install steps, then copy the binary next to it after each build:
+To run your local build in the launcher, clone the repository as the plugin folder (`~/.local/share/pop-launcher/plugins/vscode-open-recent`), then copy the binary next to `plugin.ron` after each build:
 
 ```sh
 cp target/release/vscode-open-recent .
@@ -93,7 +102,8 @@ The release workflow builds static x86_64 and ARM64 binaries and attaches them t
 
 ## Changelog
 
-- **2026-11-08** **rewrite:** rewritten in Rust and distributed as a static binary through GitHub releases, so Node.js is no longer needed. `config.json` is now optional (see `config.example.json`)
+- **2026-11-08** **v1.1.0:** icons now come from the desktop icon theme (with a separate icon for remote folders), so the `assets` folder is gone and `plugin.ron` ships ready to use. The trigger word can be changed in `plugin.ron`, and only `vc` followed by a space (or `vc` alone) activates the plugin
+- **2026-11-08** **v1.0.0:** rewritten in Rust and distributed as a static binary through GitHub releases, so Node.js is no longer needed. `config.json` is now optional (see `config.example.json`)
 - **2026-11-07** **build:** bundle dependencies into `dist/index.cjs` so no `npm install` is needed; upgrade dependencies
 - **2026-11-06** **fix:** `vc` trigger, icon paths, paths with spaces, remote folders; `config.json` options now take effect
 - **2026-05-18** **fix:** read from `workspaceStorage` for VS Code 1.120+ compatibility

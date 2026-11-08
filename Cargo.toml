@@ -1,6 +1,6 @@
 [package]
 name = "pop-launcher-vscode-recents"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "pop-launcher plugin to search and open recent VS Code folders and workspaces"
 repository = "https://github.com/Silureth/pop-launcher-vscode-recents"

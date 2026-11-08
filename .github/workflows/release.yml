@@ -21,7 +21,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check tag matches Cargo.toml version
         run: |
@@ -43,10 +43,10 @@ jobs:
           dir=vscode-open-recent
           mkdir "$dir"
           cp target/${{ matrix.target }}/release/vscode-open-recent "$dir/"
-          cp -r assets config.example.json plugin.example.ron LICENSE README.md "$dir/"
+          cp config.example.json plugin.ron LICENSE README.md "$dir/"
           tar -czf vscode-open-recent-${{ matrix.arch }}.tar.gz "$dir"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vscode-open-recent-${{ matrix.arch }}
           path: vscode-open-recent-${{ matrix.arch }}.tar.gz
@@ -55,10 +55,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: vscode-open-recent-*.tar.gz
           generate_release_notes: true

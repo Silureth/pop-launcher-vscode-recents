@@ -3,13 +3,10 @@ mod vscode;
 
 use config::Config;
 use pop_launcher::{IconSource, PluginResponse, PluginSearchResult, Request};
-use std::borrow::Cow;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use vscode::{Entry, EntryType};
 
-/// Must match the `regex` in plugin.ron.
-const TRIGGER: &str = "vc";
 const MAX_RESULTS: usize = 8;
 
 struct Plugin {
@@ -17,7 +14,6 @@ struct Plugin {
     /// Indices into `entries` for the rows currently shown.
     shown: Vec<usize>,
     config: Config,
-    assets: PathBuf,
     out: io::StdoutLock<'static>,
 }
 
@@ -30,15 +26,8 @@ impl Plugin {
         }
     }
 
-    fn icon(&self, name: &str) -> Option<IconSource> {
-        let path = self.assets.join(format!("{name}.svg"));
-        Some(IconSource::Name(Cow::Owned(
-            path.to_string_lossy().into_owned(),
-        )))
-    }
-
     fn search(&mut self, query: &str) {
-        let query = clean_query(query, TRIGGER);
+        let query = strip_trigger(query);
         self.shown = if query.is_empty() {
             (0..self.entries.len().min(MAX_RESULTS)).collect()
         } else {
@@ -53,12 +42,11 @@ impl Plugin {
             } else {
                 ("No results found.", "Try a different query.")
             };
-            let icon = self.icon("info");
             self.send(PluginResponse::Append(PluginSearchResult {
                 id: 0,
                 name: name.into(),
                 description: description.into(),
-                icon,
+                icon: Some(IconSource::Name("dialog-information".into())),
                 ..Default::default()
             }));
         }
@@ -69,10 +57,7 @@ impl Plugin {
                 id: id as u32,
                 name: entry.name.clone(),
                 description: entry.path.clone(),
-                icon: self.icon(match entry.kind {
-                    EntryType::Folder => "folder",
-                    EntryType::Workspace => "workspace",
-                }),
+                icon: Some(icon(entry)),
                 ..Default::default()
             };
             self.send(PluginResponse::Append(result));
@@ -90,14 +75,28 @@ impl Plugin {
     }
 }
 
-/// Strips the leading trigger word (e.g. "vc") and surrounding whitespace.
-fn clean_query<'a>(query: &'a str, trigger: &str) -> &'a str {
-    let query = query.trim();
-    query.strip_prefix(trigger).unwrap_or(query).trim()
+/// Icon from the user's desktop icon theme, so it matches the rest of the system.
+fn icon(entry: &Entry) -> IconSource {
+    match (entry.kind, &entry.local_path) {
+        // No standard icon name exists for workspaces; the theme picks one for
+        // the file type VS Code registers, or falls back to a generic document.
+        (EntryType::Workspace, _) => IconSource::Mime("application/x-code-workspace".into()),
+        (EntryType::Folder, Some(_)) => IconSource::Name("folder".into()),
+        (EntryType::Folder, None) => IconSource::Name("folder-remote".into()),
+    }
+}
+
+/// Drops the trigger word the launcher routed on (whatever `regex` in
+/// plugin.ron matches, `vc` by default), leaving just the search text.
+fn strip_trigger(query: &str) -> &str {
+    match query.trim().split_once(char::is_whitespace) {
+        Some((_, rest)) => rest.trim(),
+        None => "",
+    }
 }
 
 fn main() {
-    // The binary sits in the plugin folder, next to assets/ and config.json.
+    // The binary sits in the plugin folder, next to plugin.ron and config.json.
     let plugin_dir = std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(PathBuf::from))
@@ -112,7 +111,6 @@ fn main() {
         entries,
         shown: Vec::new(),
         config,
-        assets: plugin_dir.join("assets"),
         out: io::stdout().lock(),
     };
 
@@ -132,10 +130,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clean_query_strips_trigger() {
-        assert_eq!(clean_query("vc", "vc"), "");
-        assert_eq!(clean_query("  vc  my app ", "vc"), "my app");
-        assert_eq!(clean_query("vcfoo", "vc"), "foo");
-        assert_eq!(clean_query("api vs", "vc"), "api vs");
+    fn strip_trigger_drops_first_word() {
+        assert_eq!(strip_trigger("vc"), "");
+        assert_eq!(strip_trigger("  vc  my app "), "my app");
+        assert_eq!(strip_trigger("code api"), "api");
     }
 }
