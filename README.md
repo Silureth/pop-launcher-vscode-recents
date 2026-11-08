@@ -108,6 +108,10 @@ The release workflow builds static x86_64 and ARM64 binaries and attaches them t
 - **2026-11-06** **fix:** `vc` trigger, icon paths, paths with spaces, remote folders; `config.json` options now take effect
 - **2026-05-18** **fix:** read from `workspaceStorage` for VS Code 1.120+ compatibility
 
+## AI assistance
+
+Most of the code since v1.0.0 (the Rust rewrite) was written with [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant.
+
 ## Credits
 
 I don't remember where I originally found this — but thank you to whoever created it.
